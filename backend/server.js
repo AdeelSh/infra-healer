@@ -3,30 +3,19 @@ const express = require('express')
 const cors = require('cors')
 const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb')
 const { unmarshall } = require('@aws-sdk/util-dynamodb')
-const winston = require('winston')
-const WinstonCloudWatch = require('winston-cloudwatch')
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
-// ── Logger ────────────────────────────────────────────────────────────────────
-const logger = winston.createLogger({
-  transports: [
-    new winston.transports.Console(),
-    new WinstonCloudWatch({
-      logGroupName: process.env.CW_LOG_GROUP || '/infra-healer/backend',
-      logStreamName: `backend-${new Date().toISOString().slice(0, 10)}`,
-      awsRegion: process.env.AWS_REGION || 'ap-southeast-2',
-      messageFormatter: ({ level, message }) => `[${level.toUpperCase()}] ${message}`
-    })
-  ]
-})
+const log = {
+  info:  (msg) => console.log(`[INFO] ${msg}`),
+  warn:  (msg) => console.log(`[WARN] ${msg}`),
+  error: (msg) => console.log(`[ERROR] ${msg}`),
+}
 
-// ── DynamoDB ──────────────────────────────────────────────────────────────────
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'ap-southeast-2' })
 
-// ── Simulated metrics state ───────────────────────────────────────────────────
 let state = {
   healthy: true, cpu: 34, latency: 142,
   errorRate: 0.3, rpm: 847, activeBug: null
@@ -40,15 +29,16 @@ setInterval(() => {
   state.rpm       = Math.min(1200, Math.max(400, state.rpm       + (Math.random() - 0.5) * 60))
 }, 3000)
 
-// ── Bug bank ──────────────────────────────────────────────────────────────────
 const BUGS = {
   null_ref: {
     label: 'Null reference',
     inject: () => {
       state.healthy = false; state.activeBug = 'null_ref'
       state.latency = null; state.rpm = 0; state.errorRate = 18.4
-      logger.error("FATAL TypeError: Cannot read properties of undefined (reading 'metrics') at /routes/metrics.js:34")
-      logger.error('FATAL Node.js process exiting with code 1 — unhandled exception')
+      console.log("FATAL TypeError: Cannot read properties of undefined (reading 'metrics') at backend/server.js")
+      console.log('FATAL Offending code: const datapoints = response.MetricDataResults[0].Values.map(v => v)')
+      console.log('FATAL Fix: add null guard — const datapoints = response.MetricDataResults?.[0]?.Values ?? []')
+      console.log('FATAL Node.js process exiting with code 1 — unhandled exception')
     }
   },
   missing_env: {
@@ -56,8 +46,8 @@ const BUGS = {
     inject: () => {
       state.healthy = false; state.activeBug = 'missing_env'
       state.latency = null; state.rpm = 0; state.errorRate = 22.1
-      logger.error('FATAL ReferenceError: process.env.DB_URL is undefined — cannot connect to data store')
-      logger.error('FATAL Service startup failed — missing required environment variable DB_URL')
+      console.log('FATAL ReferenceError: process.env.DB_URL is undefined — cannot connect to data store')
+      console.log('FATAL Service startup failed — missing required environment variable DB_URL')
     }
   },
   divide_by_zero: {
@@ -65,20 +55,25 @@ const BUGS = {
     inject: () => {
       state.healthy = false; state.activeBug = 'divide_by_zero'
       state.latency = null; state.rpm = 0; state.errorRate = 31.7
-      logger.error('FATAL ZeroDivisionError: totalRequests is 0 — cannot compute error rate at /routes/metrics.js:61')
-      logger.error('FATAL Unhandled promise rejection — metrics calculation failed')
+      console.log('FATAL ZeroDivisionError: totalRequests is 0 — cannot compute error rate at /routes/metrics.js:61')
+      console.log('FATAL Unhandled promise rejection — metrics calculation failed')
     }
   }
 }
 
-// ── Routes ────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   if (!state.healthy) {
-    logger.error('ERROR Health check failed — service degraded')
+    console.log('ERROR Health check failed — service degraded')
     return res.status(503).json({ status: 'degraded', uptime: process.uptime() })
   }
   res.json({ status: 'ok', uptime: Math.round(process.uptime()) })
 })
+
+// Metrics processor — intentionally vulnerable for demo
+function processMetrics(response) {
+  const datapoints = response.MetricDataResults[0].Values.map(v => v)
+  return datapoints
+}
 
 app.get('/metrics/cpu', (req, res) => {
   if (!state.healthy) return res.status(503).json({ error: 'Service unavailable' })
@@ -105,54 +100,37 @@ app.post('/inject-bug', (req, res) => {
   const bug = BUGS[bugType]
   if (!bug) return res.status(400).json({ error: `Unknown bug type: ${bugType}` })
   if (!state.healthy) return res.status(409).json({ error: 'Bug already active' })
-  logger.warn(`Bug injection triggered: ${bug.label}`)
+  log.warn(`Bug injection triggered: ${bug.label}`)
   bug.inject()
   res.json({ message: `Bug injected: ${bug.label}`, bugType })
 })
 
-// Inject an infrastructure bug — scales ECS service to zero via AWS API
 app.post('/inject-infra-bug', async (req, res) => {
   if (!state.healthy) return res.status(409).json({ error: 'Bug already active' })
-
-  const { ECSClient, UpdateServiceCommand, DescribeServicesCommand } = require('@aws-sdk/client-ecs')
+  const { ECSClient, UpdateServiceCommand } = require('@aws-sdk/client-ecs')
   const ecsClient = new ECSClient({ region: process.env.AWS_REGION || 'ap-southeast-2' })
-
   try {
-    // Scale ECS service to 0
     await ecsClient.send(new UpdateServiceCommand({
       cluster: process.env.ECS_CLUSTER || 'infra-healer-cluster',
       service: process.env.ECS_SERVICE || 'infra-healer-backend',
       desiredCount: 0
     }))
-
-    // Mark state as unhealthy immediately for dashboard effect
-    state.healthy = false
-    state.activeBug = 'ecs_scale_zero'
-    state.latency = null
-    state.rpm = 0
-    state.errorRate = 0
-
-    logger.error('FATAL ECS service scaled to desiredCount=0 — all tasks stopped')
-    logger.error('FATAL No running tasks in cluster infra-healer-cluster / service infra-healer-backend')
-
+    state.healthy = false; state.activeBug = 'ecs_scale_zero'
+    state.latency = null; state.rpm = 0; state.errorRate = 0
+    console.log('FATAL ECS service scaled to desiredCount=0 — all tasks stopped')
     res.json({ message: 'Infra bug injected: ECS service scaled to 0', bugType: 'ecs_scale_zero' })
   } catch (err) {
-    // If not on real AWS (local dev), just simulate the state change
-    logger.warn(`ECS API not available (local dev) — simulating scale-to-zero: ${err.message}`)
-    state.healthy = false
-    state.activeBug = 'ecs_scale_zero'
-    state.latency = null
-    state.rpm = 0
-    state.errorRate = 0
-    logger.error('FATAL ECS service scaled to desiredCount=0 — all tasks stopped (simulated)')
-    res.json({ message: 'Infra bug injected (simulated): ECS service scaled to 0', bugType: 'ecs_scale_zero' })
+    state.healthy = false; state.activeBug = 'ecs_scale_zero'
+    state.latency = null; state.rpm = 0; state.errorRate = 0
+    console.log('FATAL ECS service scaled to desiredCount=0 — all tasks stopped (simulated)')
+    res.json({ message: 'Infra bug injected (simulated)', bugType: 'ecs_scale_zero' })
   }
 })
 
 app.post('/restore', (req, res) => {
   state.healthy = true; state.activeBug = null
   state.cpu = 34; state.latency = 142; state.errorRate = 0.3; state.rpm = 847
-  logger.info('Service restored to healthy state after autonomous heal')
+  log.info('Service restored to healthy state after autonomous heal')
   res.json({ message: 'Service restored' })
 })
 
@@ -171,10 +149,10 @@ app.get('/heal-status', async (req, res) => {
     }
     res.json({ events, healing, healed, serviceHealthy: state.healthy, activeBug: state.activeBug })
   } catch (err) {
-    logger.error(`ERROR DynamoDB poll failed: ${err.message}`)
+    log.error(`DynamoDB poll failed: ${err.message}`)
     res.status(500).json({ error: err.message, events: [], healing: false, healed: false })
   }
 })
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => logger.info(`Backend running on port ${PORT}`))
+app.listen(PORT, () => log.info(`Backend running on port ${PORT}`))
