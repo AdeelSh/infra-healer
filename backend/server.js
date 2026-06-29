@@ -15,6 +15,24 @@ const log = {
 }
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'ap-southeast-2' })
+const { PutItemCommand } = require('@aws-sdk/client-dynamodb')
+
+async function writeHealEvent(step, message, status) {
+  try {
+    await dynamo.send(new PutItemCommand({
+      TableName: 'infra_healer_events',
+      Item: {
+        id:        { S: `${Date.now()}-${Math.random().toString(36).slice(2)}` },
+        timestamp: { N: String(Date.now()) },
+        step:      { S: step },
+        message:   { S: message },
+        status:    { S: status }
+      }
+    }))
+  } catch (err) {
+    console.log(`Failed to write heal event: ${err.message}`)
+  }
+}
 
 let state = {
   healthy: true, cpu: 34, latency: 142,
@@ -95,13 +113,18 @@ app.get('/metrics/rpm', (req, res) => {
   res.json({ value: Math.round(state.rpm) })
 })
 
-app.post('/inject-bug', (req, res) => {
+app.post('/inject-bug', async (req, res) => {
   const { bugType } = req.body
   const bug = BUGS[bugType]
   if (!bug) return res.status(400).json({ error: `Unknown bug type: ${bugType}` })
   if (!state.healthy) return res.status(409).json({ error: 'Bug already active' })
   log.warn(`Bug injection triggered: ${bug.label}`)
   bug.inject()
+  await writeHealEvent(
+    'detected',
+    `${bug.label} detected — service throwing FATAL errors. Waiting for orchestrator to diagnose...`,
+    'running'
+  )
   res.json({ message: `Bug injected: ${bug.label}`, bugType })
 })
 
@@ -118,11 +141,21 @@ app.post('/inject-infra-bug', async (req, res) => {
     state.healthy = false; state.activeBug = 'ecs_scale_zero'
     state.latency = null; state.rpm = 0; state.errorRate = 0
     console.log('FATAL ECS service scaled to desiredCount=0 — all tasks stopped')
+    await writeHealEvent(
+      'detected',
+      'ECS service scaled to zero — all tasks stopped. Infrastructure misconfiguration detected. Waiting for orchestrator...',
+      'running'
+    )
     res.json({ message: 'Infra bug injected: ECS service scaled to 0', bugType: 'ecs_scale_zero' })
   } catch (err) {
     state.healthy = false; state.activeBug = 'ecs_scale_zero'
     state.latency = null; state.rpm = 0; state.errorRate = 0
     console.log('FATAL ECS service scaled to desiredCount=0 — all tasks stopped (simulated)')
+    await writeHealEvent(
+      'detected',
+      'ECS service scaled to zero (simulated) — infrastructure misconfiguration detected.',
+      'running'
+    )
     res.json({ message: 'Infra bug injected (simulated)', bugType: 'ecs_scale_zero' })
   }
 })

@@ -1,18 +1,20 @@
 import { useEffect, useRef } from 'react'
 
-const ICONS = {
-  orchestrator:         '◎',
-  reasoning:            '→',
-  run_diagnosis:        '⌕',
-  describe_ecs_service: '⊞',
-  fix_ecs_service:      '⟳',
-  apply_patch:          '✎',
-  run_validation:       '✓',
-  trigger_deploy:       '▶',
-  escalate:             '⚠',
-  complete:             '★',
+const STEP_LABELS = {
+  detected:             '🔴 Bug detected',
+  orchestrator:         '🧠 Orchestrator',
+  reasoning:            '💭 Reasoning',
+  run_diagnosis:        '🔍 Diagnosis',
+  describe_ecs_service: '⊞ ECS check',
+  fix_ecs_service:      '⟳ ECS fix',
+  apply_patch:          '✎ Patch',
+  run_validation:       '✓ Validation',
+  trigger_deploy:       '▶ Deploy',
+  escalate:             '⚠ Escalate',
+  complete:             '★ Complete',
 }
-const COLORS = { running:'#EF9F27', success:'#639922', error:'#E24B4A' }
+
+const COLORS = { running: '#EF9F27', success: '#639922', error: '#E24B4A' }
 
 export default function HealLog({ healData }) {
   const { events = [], healing, healed } = healData
@@ -27,21 +29,33 @@ export default function HealLog({ healData }) {
   return (
     <div style={{
       background:'#111', borderRadius:8, padding:'12px 14px',
-      fontFamily:'monospace', fontSize:12, lineHeight:1.75,
-      minHeight:180, maxHeight:260, overflowY:'auto'
+      fontFamily:'monospace', fontSize:12, lineHeight:1.8,
+      minHeight:180, maxHeight:280, overflowY:'auto'
     }}>
       {events.length === 0 && (
         <span style={{ color:'#555' }}>Waiting for heal events...</span>
       )}
       {events.map(e => (
-        <div key={e.id}>
-          <span style={{ color:'#444' }}>[{fmt(e.timestamp)}]</span>{' '}
-          <span style={{ color: COLORS[e.status] || '#888' }}>{ICONS[e.step] ?? '.'} {e.step}</span>{' '}
-          <span style={{ color:'#ccc' }}>{e.message}</span>
+        <div key={e.id} style={{ marginBottom: 6 }}>
+          <div>
+            <span style={{ color:'#444' }}>[{fmt(e.timestamp)}]</span>{' '}
+            <span style={{ color: COLORS[e.status] || '#888', fontWeight: 600 }}>
+              {STEP_LABELS[e.step] ?? e.step}
+            </span>
+          </div>
+          <div style={{ color:'#ccc', paddingLeft: 4 }}>{e.message}</div>
         </div>
       ))}
-      {healing && <div style={{ color:'#EF9F27', marginTop:4 }}>● healing in progress...</div>}
-      {healed  && <div style={{ color:'#639922', marginTop:4, fontWeight:600 }}>★ heal complete — no human intervention required</div>}
+      {healing && (
+        <div style={{ color:'#EF9F27', marginTop:4 }}>
+          ● healing in progress...
+        </div>
+      )}
+      {healed && (
+        <div style={{ color:'#639922', marginTop:4, fontWeight:600 }}>
+          ★ heal complete — no human intervention required
+        </div>
+      )}
       <div ref={bottomRef} />
     </div>
   )
