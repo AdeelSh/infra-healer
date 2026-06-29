@@ -99,10 +99,23 @@ export default function App() {
             {lastUpdated ? `Updated ${lastUpdated.toTimeString().slice(0,8)}` : 'Connecting...'}
           </p>
         </div>
-        <div style={{ fontSize:12, fontWeight:500, padding:'5px 12px', borderRadius:20,
-          background: metrics.healthy ? '#EAF3DE' : '#FCEBEB',
-          color:      metrics.healthy ? '#3B6D11' : '#A32D2D' }}>
-          {metrics.healthy ? 'All systems operational' : 'Service degraded'}
+        <div style={{
+          fontSize:18, fontWeight:700, padding:'12px 28px', borderRadius:12,
+          background: metrics.healthy ? '#D4EDC1' : '#FBD2D2',
+          color:      metrics.healthy ? '#1F4D08' : '#7A1414',
+          border: `2px solid ${metrics.healthy ? '#639922' : '#E24B4A'}`,
+          boxShadow: metrics.healthy
+            ? '0 0 0 4px rgba(99,153,34,0.15)'
+            : '0 0 0 4px rgba(226,75,74,0.15)',
+          display:'flex', alignItems:'center', gap:10,
+          letterSpacing:'0.02em'
+        }}>
+          <span style={{
+            display:'inline-block', width:12, height:12, borderRadius:'50%',
+            background: metrics.healthy ? '#639922' : '#E24B4A',
+            boxShadow: `0 0 8px ${metrics.healthy ? '#639922' : '#E24B4A'}`
+          }} />
+          {metrics.healthy ? 'ALL SYSTEMS OPERATIONAL' : 'SERVICE DEGRADED'}
         </div>
       </div>
 
