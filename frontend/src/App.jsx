@@ -178,9 +178,9 @@ export default function App() {
           </button>
 
           <span style={{ fontSize:12, color:'#888', marginLeft:'auto' }}>
-            {!metrics.healthy && !healData.healing && '● Waiting for orchestrator...'}
-            {healData.healing && '● Gemini healing in progress...'}
-            {healData.healed && metrics.healthy && 'Heal successful'}
+            {!metrics.healthy && !healData.healing && !healData.healed && '● Waiting for orchestrator...'}
+            {healData.healing && !healData.healed && '● AI healing in progress...'}
+            {healData.healed && '✓ Last heal successful'}
           </span>
         </div>
 
