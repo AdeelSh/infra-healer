@@ -17,6 +17,21 @@ const log = {
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'ap-southeast-2' })
 const { PutItemCommand } = require('@aws-sdk/client-dynamodb')
 
+async function clearHealEvents() {
+  try {
+    const { ScanCommand: SC, DeleteItemCommand } = require('@aws-sdk/client-dynamodb')
+    const scan = await dynamo.send(new SC({ TableName: 'infra_healer_events' }))
+    await Promise.all(scan.Items.map(item =>
+      dynamo.send(new DeleteItemCommand({
+        TableName: 'infra_healer_events',
+        Key: { id: item.id }
+      }))
+    ))
+  } catch (err) {
+    console.log(`Failed to clear heal events: ${err.message}`)
+  }
+}
+
 async function writeHealEvent(step, message, status) {
   try {
     await dynamo.send(new PutItemCommand({
@@ -120,6 +135,7 @@ app.post('/inject-bug', async (req, res) => {
   if (!state.healthy) return res.status(409).json({ error: 'Bug already active' })
   log.warn(`Bug injection triggered: ${bug.label}`)
   bug.inject()
+  await clearHealEvents()  // ← add this line
   await writeHealEvent(
     'detected',
     `${bug.label} detected — service throwing FATAL errors. Waiting for orchestrator to diagnose...`,
@@ -176,7 +192,8 @@ app.get('/heal-status', async (req, res) => {
     const last = events[events.length - 1]
     const healing = !!last && last.status === 'running'
     const healed  = !!last && last.status === 'success'
-    if (healed && !state.healthy) {
+    const deploying = !!last && last.step === 'trigger_deploy' && last.status === 'running'
+    if ((healed || deploying) && !state.healthy) {
       state.healthy = true; state.activeBug = null
       state.cpu = 34; state.latency = 142; state.errorRate = 0.3; state.rpm = 847
     }
