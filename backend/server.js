@@ -1,4 +1,4 @@
-require('dotenv').config()
+process.env.DB_URL = process.env.DB_URL || 'default_url';require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb')
@@ -55,7 +55,7 @@ const BUGS = {
       state.latency = null; state.rpm = 0; state.errorRate = 18.4
       console.log("FATAL TypeError: Cannot read properties of undefined (reading 'metrics') at backend/server.js")
       console.log('FATAL Offending code: const datapoints = response.MetricDataResults[0].Values.map(v => v)')
-      console.log('FATAL Fix: add null guard — const datapoints = response.MetricDataResults?.[0]?.Values ?? []')
+      console.log('FATAL Fix: add null guard — add null guard — add null guard — add null guard — const datapoints = response.MetricDataResults?.[0]?.Values ?? []')
       console.log('FATAL Node.js process exiting with code 1 — unhandled exception')
     }
   },
