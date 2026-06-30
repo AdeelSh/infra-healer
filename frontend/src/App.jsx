@@ -87,6 +87,7 @@ export default function App() {
     return d > 0 ? 'up' : d < 0 ? 'down' : 'flat'
   }
   const fmt = (v, s = '') => v === null ? '-' : `${v}${s}`
+  const isHealthy = metrics.healthy && !healData.activeBug
 
   return (
     <div style={{ minHeight:'100vh', background:'#f5f5f3', fontFamily:'system-ui,sans-serif', padding:24, boxSizing:'border-box' }}>
@@ -101,10 +102,10 @@ export default function App() {
         </div>
         <div style={{
           fontSize:18, fontWeight:700, padding:'12px 28px', borderRadius:12,
-          background: metrics.healthy ? '#D4EDC1' : '#FBD2D2',
-          color:      metrics.healthy ? '#1F4D08' : '#7A1414',
-          border: `2px solid ${metrics.healthy ? '#639922' : '#E24B4A'}`,
-          boxShadow: metrics.healthy
+          background: isHealthy ? '#D4EDC1' : '#FBD2D2',
+          color:      isHealthy ? '#1F4D08' : '#7A1414',
+          border: `2px solid ${isHealthy ? '#639922' : '#E24B4A'}`,
+          boxShadow: isHealthy
             ? '0 0 0 4px rgba(99,153,34,0.15)'
             : '0 0 0 4px rgba(226,75,74,0.15)',
           display:'flex', alignItems:'center', gap:10,
@@ -112,10 +113,10 @@ export default function App() {
         }}>
           <span style={{
             display:'inline-block', width:12, height:12, borderRadius:'50%',
-            background: metrics.healthy ? '#639922' : '#E24B4A',
-            boxShadow: `0 0 8px ${metrics.healthy ? '#639922' : '#E24B4A'}`
+            background: isHealthy ? '#639922' : '#E24B4A',
+            boxShadow: `0 0 8px ${isHealthy ? '#639922' : '#E24B4A'}`
           }} />
-          {metrics.healthy ? 'ALL SYSTEMS OPERATIONAL' : 'SERVICE DEGRADED'}
+          {isHealthy ? 'ALL SYSTEMS OPERATIONAL' : 'SERVICE DEGRADED'}
         </div>
       </div>
 
@@ -129,7 +130,7 @@ export default function App() {
 
       {/* Sparklines */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
-        <SparklineChart title="Error rate last 60s" data={history.errorRate} color={metrics.healthy ? '#639922' : '#E24B4A'} threshold={2} />
+        <SparklineChart title="Error rate last 60s" data={history.errorRate} color={isHealthy ? '#639922' : '#E24B4A'} threshold={2} />
         <SparklineChart title="API latency p99 last 60s" data={history.latency} color="#185FA5" />
       </div>
 

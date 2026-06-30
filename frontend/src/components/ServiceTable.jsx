@@ -33,11 +33,7 @@ export default function ServiceTable({ healthy, healData, activeBug }) {
     {
       name:   'Lambda orchestrator',
       status: healData.healing ? 'active' : healData.healed ? 'idle' : 'idle',
-      detail: healData.healing
-        ? 'Gemini healing...'
-        : healData.healed
-        ? 'Last heal successful'
-        : 'Awaiting trigger'
+      detail: healData.healing ? 'AI healing...' : healData.healed ? 'Last heal successful' : 'Awaiting trigger'
     }
   ]
 
