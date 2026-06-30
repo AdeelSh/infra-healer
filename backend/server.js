@@ -104,7 +104,7 @@ app.get('/health', (req, res) => {
 
 // Metrics processor — intentionally vulnerable for demo
 function processMetrics(response) {
-  const datapoints = response.MetricDataResults[0].Values.map(v => v)
+  const datapoints = response.MetricDataResults?.[0]?.Values ?? []
   return datapoints
 }
 
