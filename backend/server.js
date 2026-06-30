@@ -1,4 +1,4 @@
-process.env.DB_URL = process.env.DB_URL || 'default_url';require('dotenv').config()
+const DB_URL = process.env.DB_URL || 'http://localhost:5432';process.env.DB_URL = process.env.DB_URL || 'default_url';require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb')
