@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+output.json
+lambda/lambda.zip
+lambda/package/
+reset-demo.sh
+task-definition.json

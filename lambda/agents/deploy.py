@@ -2,12 +2,18 @@ import boto3
 import os
 
 def trigger_deploy() -> dict:
-    client = boto3.client('codepipeline', region_name='ap-southeast-2')
-    pipeline_name = os.environ.get('PIPELINE_NAME', 'infra-healer-pipeline')
-    response = client.start_pipeline_execution(name=pipeline_name)
-    execution_id = response['pipelineExecutionId']
+    ecs = boto3.client('ecs', region_name='ap-southeast-2')
+    cluster = os.environ.get('ECS_CLUSTER', 'infra-healer-cluster')
+    service  = os.environ.get('ECS_SERVICE',  'infra-healer-backend')
+
+    response = ecs.update_service(
+        cluster=cluster,
+        service=service,
+        forceNewDeployment=True
+    )
+
     return {
-        'message': f'CodePipeline triggered. Execution: {execution_id[:8]}. ECS redeploying...',
+        'message': f'ECS forced new deployment triggered for {service}. New tasks starting...',
         'success': True,
-        'execution_id': execution_id
+        'serviceStatus': response['service']['status']
     }
