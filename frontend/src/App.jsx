@@ -16,6 +16,7 @@ export default function App() {
   const [injecting, setInjecting]     = useState(false)
   const [selectedBug, setSelectedBug] = useState('null_ref')
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [shownCount, setShownCount]   = useState(0)   // drip-feed: how many events are revealed
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -61,9 +62,22 @@ export default function App() {
     fetchMetrics()
     fetchHealStatus()
     const m = setInterval(fetchMetrics, POLL_MS)
-    const h = setInterval(fetchHealStatus, 2000)
+    const h = setInterval(fetchHealStatus, 1000)
     return () => { clearInterval(m); clearInterval(h) }
   }, [fetchMetrics, fetchHealStatus])
+
+  // Drip-feed: when a poll delivers several events at once (the Lambda can
+  // complete a whole heal between polls), reveal them one at a time so the
+  // log reads like a live stream instead of a single paste.
+  const totalEvents = healData.events?.length ?? 0
+  useEffect(() => {
+    if (totalEvents < shownCount) { setShownCount(totalEvents); return }  // new cycle cleared the log
+    if (totalEvents > shownCount) {
+      const t = setTimeout(() => setShownCount(c => c + 1), 600)
+      return () => clearTimeout(t)
+    }
+  }, [totalEvents, shownCount])
+  const visibleHealData = { ...healData, events: (healData.events || []).slice(0, shownCount) }
 
   const injectBug = async () => {
     if (injecting || !metrics.healthy) return
@@ -141,7 +155,7 @@ export default function App() {
       {/* Service table + heal log */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
         <ServiceTable healthy={metrics.healthy} healData={healData} activeBug={healData.activeBug} />
-        <HealLog healData={healData} />
+        <HealLog healData={visibleHealData} />
       </div>
 
       {/* Controls */}
