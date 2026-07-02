@@ -1,71 +1,59 @@
+import { T } from '../App'
+
+// Service registry: each row is a lamp + name + state note, like an ops checklist.
 export default function ServiceTable({ healthy, healData, activeBug }) {
-  const isEcsBug = activeBug === 'ecs_scale_zero'
+  const healing = healData?.healing
+  const healed  = healData?.healed
+
+  const backendDown = !healthy && activeBug && activeBug !== 'ecs_scale_zero'
+  const ecsDown     = !healthy && activeBug === 'ecs_scale_zero'
+
+  const orchestrator = healing
+    ? { state:'busy', note:'AI healing…' }
+    : healed
+      ? { state:'ok', note:'Last heal successful' }
+      : (!healthy ? { state:'warn', note:'Awaiting alarm…' } : { state:'ok', note:'Standing by' })
 
   const services = [
-    {
-      name:   'React dashboard (frontend)',
-      status: 'healthy',
-      detail: 'Amplify always on'
-    },
-    {
-      name:   'Node.js metrics API (backend)',
-      status: healthy ? 'healthy' : isEcsBug ? 'stopped' : 'down',
-      detail: healthy
-        ? 'ECS Fargate running'
-        : isEcsBug
-        ? 'ECS desiredCount=0 all tasks stopped'
-        : 'ECS task crashed'
-    },
-    {
-      name:   'ECS service (infra)',
-      status: healthy ? 'healthy' : isEcsBug ? 'misconfigured' : 'healthy',
-      detail: healthy
-        ? '2/2 tasks running'
-        : isEcsBug
-        ? '0/2 tasks running desiredCount=0'
-        : '0/2 tasks running app error'
-    },
-    {
-      name:   'CloudWatch log ingestion',
-      status: healthy ? 'healthy' : 'streaming',
-      detail: healthy ? 'No errors' : 'FATAL events detected'
-    },
-    {
-      name:   'Lambda orchestrator',
-      status: healData.healing ? 'active' : healData.healed ? 'idle' : 'idle',
-      detail: healData.healing ? 'AI healing...' : healData.healed ? 'Last heal successful' : 'Awaiting trigger'
-    }
+    { name:'React dashboard',        sub:'frontend', state:'ok', note:'Amplify always on' },
+    { name:'Node.js metrics API',    sub:'backend',  state: backendDown ? 'down' : 'ok', note: backendDown ? 'FATAL errors' : 'ECS Fargate running' },
+    { name:'ECS service',            sub:'infra',    state: ecsDown ? 'down' : 'ok',     note: ecsDown ? '0/2 tasks — scaled to zero' : '2/2 tasks running' },
+    { name:'CloudWatch log ingestion', sub:'observability', state:'ok', note:'No errors' },
+    { name:'Lambda orchestrator',    sub:'AI agent', state: orchestrator.state, note: orchestrator.note },
   ]
 
-  const dotColor = {
-    healthy:       '#639922',
-    down:          '#E24B4A',
-    stopped:       '#E24B4A',
-    misconfigured: '#EF9F27',
-    active:        '#EF9F27',
-    streaming:     '#EF9F27',
-    idle:          '#639922'
+  const lamp = {
+    ok:   T.green,
+    busy: T.amber,
+    warn: T.amber,
+    down: T.red,
   }
 
   return (
-    <div style={{ background:'#fff', border:'0.5px solid #e0e0e0', borderRadius:8, padding:'12px 14px' }}>
-      <div style={{ fontSize:12, color:'#888', marginBottom:10 }}>Service status</div>
+    <div style={{ background:T.panel, border:`1px solid ${T.line}`, borderRadius:12, padding:'12px 16px' }}>
+      <div style={{ fontFamily:T.mono, fontSize:10.5, letterSpacing:'0.16em', textTransform:'uppercase', color:T.muted, marginBottom:8 }}>
+        Service status
+      </div>
+
       {services.map((s, i) => (
-        <div key={i} style={{
-          display:'flex', alignItems:'center', justifyContent:'space-between',
-          padding:'7px 0',
-          borderBottom: i < services.length - 1 ? '0.5px solid #f0f0f0' : 'none',
-          fontSize:13
+        <div key={s.name} style={{
+          display:'flex', alignItems:'center', gap:10, padding:'9px 2px',
+          borderTop: i === 0 ? 'none' : `1px solid ${T.line}`,
         }}>
-          <span style={{ display:'flex', alignItems:'center', color:'#1a1a1a' }}>
-            <span style={{
-              display:'inline-block', width:8, height:8, borderRadius:'50%',
-              background: dotColor[s.status] || '#888',
-              marginRight:8, flexShrink:0
-            }} />
-            {s.name}
+          <span style={{
+            width:8, height:8, borderRadius:'50%', flexShrink:0,
+            background: lamp[s.state],
+            boxShadow: s.state !== 'ok' ? `0 0 8px ${lamp[s.state]}` : 'none',
+          }} />
+          <span style={{ fontSize:13.5, color:T.text }}>{s.name}</span>
+          <span style={{ fontFamily:T.mono, fontSize:10, letterSpacing:'0.1em', textTransform:'uppercase',
+            color:T.faint, border:`1px solid ${T.line}`, borderRadius:5, padding:'1px 6px' }}>
+            {s.sub}
           </span>
-          <span style={{ fontSize:11, color:'#888' }}>{s.detail}</span>
+          <span style={{ marginLeft:'auto', fontFamily:T.mono, fontSize:11.5,
+            color: s.state === 'ok' ? T.muted : lamp[s.state] }}>
+            {s.note}
+          </span>
         </div>
       ))}
     </div>

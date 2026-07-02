@@ -1,62 +1,93 @@
 import { useEffect, useRef } from 'react'
+import { T } from '../App'
 
-const STEP_LABELS = {
-  detected:             '🔴 Bug detected',
-  orchestrator:         '🧠 Orchestrator',
-  reasoning:            '💭 Reasoning',
-  run_diagnosis:        '🔍 Diagnosis',
-  describe_ecs_service: '⊞ ECS check',
-  fix_ecs_service:      '⟳ ECS fix',
-  apply_patch:          '✎ Patch',
-  run_validation:       '✓ Validation',
-  trigger_deploy:       '▶ Deploy',
-  escalate:             '⚠ Escalate',
-  complete:             '★ Complete',
+// The flight recorder: every orchestrator decision, streamed as it happens.
+const STEP_META = {
+  detected:       { tag:'DETECT',   color:'#E5484D' },
+  orchestrator:   { tag:'ORCH',     color:'#5B8DEF' },
+  run_diagnosis:  { tag:'DIAG',     color:'#E8A33D' },
+  apply_patch:    { tag:'PATCH',    color:'#B08AF5' },
+  run_validation: { tag:'VALID',    color:'#3FBF7F' },
+  trigger_deploy: { tag:'DEPLOY',   color:'#5B8DEF' },
+  complete:       { tag:'COMPLETE', color:'#3FBF7F' },
+}
+const fallbackMeta = (step) => ({ tag: String(step || 'EVENT').slice(0, 8).toUpperCase(), color: T.muted })
+
+// Turn bare commit URLs in messages into links, keep everything else text.
+function renderMessage(msg) {
+  const parts = String(msg).split(/(https:\/\/github\.com\/\S+)/g)
+  return parts.map((p, i) =>
+    p.startsWith('https://github.com/')
+      ? <a key={i} href={p} target="_blank" rel="noopener noreferrer"
+          style={{ color:'#B08AF5', textDecoration:'underline', textUnderlineOffset:2 }}>
+          {p.includes('/commit/') ? `commit ${p.split('/commit/')[1].slice(0,7)}` : p}
+        </a>
+      : <span key={i}>{p}</span>
+  )
 }
 
-const COLORS = { running: '#EF9F27', success: '#639922', error: '#E24B4A' }
-
 export default function HealLog({ healData }) {
-  const { events = [], healing, healed } = healData
-  const bottomRef = useRef(null)
+  const events  = healData?.events || []
+  const healing = healData?.healing
+  const healed  = healData?.healed
+  const endRef  = useRef(null)
 
+  // Follow the feed as new lines arrive.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [events.length])
-
-  const fmt = ms => new Date(ms).toTimeString().slice(0, 8)
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [events.length, healed])
 
   return (
     <div style={{
-      background:'#111', borderRadius:8, padding:'12px 14px',
-      fontFamily:'monospace', fontSize:12, lineHeight:1.8,
-      minHeight:180, maxHeight:280, overflowY:'auto'
+      background:'#080D16', border:`1px solid ${T.line}`, borderRadius:12,
+      padding:'12px 0 10px', display:'flex', flexDirection:'column', minHeight:220,
     }}>
-      {events.length === 0 && (
-        <span style={{ color:'#555' }}>Waiting for heal events...</span>
-      )}
-      {events.map(e => (
-        <div key={e.id} style={{ marginBottom: 6 }}>
-          <div>
-            <span style={{ color:'#444' }}>[{fmt(e.timestamp)}]</span>{' '}
-            <span style={{ color: COLORS[e.status] || '#888', fontWeight: 600 }}>
-              {STEP_LABELS[e.step] ?? e.step}
-            </span>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 16px 8px',
+        borderBottom:`1px solid ${T.line}` }}>
+        <span style={{ fontFamily:T.mono, fontSize:10.5, letterSpacing:'0.16em', textTransform:'uppercase', color:T.muted }}>
+          Heal feed
+        </span>
+        {healing && (
+          <span style={{ fontFamily:T.mono, fontSize:10, color:T.amber, marginLeft:'auto' }}>● LIVE</span>
+        )}
+      </div>
+
+      <div style={{ overflowY:'auto', maxHeight:260, padding:'8px 16px 0' }}>
+        {events.length === 0 ? (
+          <div style={{ fontFamily:T.mono, fontSize:12, color:T.faint, padding:'22px 0', textAlign:'center' }}>
+            No active heal cycle. Inject a fault to watch the agent work.
           </div>
-          <div style={{ color:'#ccc', paddingLeft: 4 }}>{e.message}</div>
-        </div>
-      ))}
-      {healing && (
-        <div style={{ color:'#EF9F27', marginTop:4 }}>
-          ● healing in progress...
-        </div>
-      )}
-      {healed && (
-        <div style={{ color:'#639922', marginTop:4, fontWeight:600 }}>
-          ★ heal complete — no human intervention required
-        </div>
-      )}
-      <div ref={bottomRef} />
+        ) : events.map((e, i) => {
+          const meta = STEP_META[e.step] || fallbackMeta(e.step)
+          const time = e.timestamp ? new Date(Number(e.timestamp)).toTimeString().slice(0, 8) : ''
+          return (
+            <div key={e.id || i} style={{
+              display:'flex', gap:10, alignItems:'baseline',
+              padding:'5px 0', animation:'lineIn 0.35s ease both',
+            }}>
+              <span style={{ fontFamily:T.mono, fontSize:10.5, color:T.faint, flexShrink:0 }}>{time}</span>
+              <span style={{
+                fontFamily:T.mono, fontSize:9.5, fontWeight:600, letterSpacing:'0.08em',
+                color:meta.color, border:`1px solid ${meta.color}55`, borderRadius:4,
+                padding:'1px 6px', flexShrink:0, minWidth:58, textAlign:'center',
+              }}>
+                {meta.tag}
+              </span>
+              <span style={{ fontFamily:T.mono, fontSize:12, lineHeight:1.6, color:'#C4CDDB', wordBreak:'break-word' }}>
+                {renderMessage(e.message)}
+              </span>
+            </div>
+          )
+        })}
+
+        {healed && events.length > 0 && (
+          <div style={{ fontFamily:T.mono, fontSize:11.5, fontWeight:600, color:T.green,
+            padding:'8px 0 4px', letterSpacing:'0.04em' }}>
+            ★ HEAL COMPLETE — NO HUMAN INTERVENTION REQUIRED
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
     </div>
   )
 }

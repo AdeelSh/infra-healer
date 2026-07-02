@@ -9,6 +9,24 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 const POLL_MS = 3000
 const HISTORY_MAX = 20
 
+// ── Design tokens ─────────────────────────────────────────────────────────
+export const T = {
+  bg:       '#0C111B',
+  panel:    '#121A29',
+  panelSoft:'#0F1522',
+  line:     '#1E2A3E',
+  text:     '#E7ECF4',
+  muted:    '#8B97AB',
+  faint:    '#5A6578',
+  blue:     '#5B8DEF',
+  green:    '#3FBF7F',
+  amber:    '#E8A33D',
+  red:      '#E5484D',
+  mono:     "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  display:  "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  body:     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+}
+
 export default function App() {
   const [metrics, setMetrics]         = useState({ healthy: false, cpu: null, latency: null, errorRate: null, rpm: null })
   const [history, setHistory]         = useState({ cpu: [], latency: [], errorRate: [], rpm: [] })
@@ -100,109 +118,149 @@ export default function App() {
     const d = arr[arr.length - 1] - arr[arr.length - 2]
     return d > 0 ? 'up' : d < 0 ? 'down' : 'flat'
   }
-  const fmt = (v, s = '') => v === null ? '-' : `${v}${s}`
+  const fmt = (v, s = '') => v === null ? '—' : `${v}${s}`
+
   const status = healData.healing ? 'healing'
     : (!metrics.healthy || healData.activeBug || (healData.events?.length && !healData.healed)) ? 'degraded'
     : 'operational'
   const isHealthy = status === 'operational'
 
-  return (
-    <div style={{ minHeight:'100vh', background:'#f5f5f3', fontFamily:'system-ui,sans-serif', padding:24, boxSizing:'border-box' }}>
+  const S = {
+    operational: { color: T.green, label: 'ALL SYSTEMS OPERATIONAL' },
+    healing:     { color: T.amber, label: 'AI HEALING IN PROGRESS'  },
+    degraded:    { color: T.red,   label: 'SERVICE DEGRADED'        },
+  }[status]
 
-      {/* Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+  const panel = {
+    background: T.panel, border: `1px solid ${T.line}`, borderRadius: 12,
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:T.bg, fontFamily:T.body, color:T.text, padding:'20px 24px 32px', boxSizing:'border-box' }}>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        * { box-sizing: border-box; }
+        body { margin: 0; background: ${T.bg}; }
+        @keyframes beacon {
+          0%, 100% { box-shadow: 0 0 0 0 ${S.color}66; }
+          50%      { box-shadow: 0 0 0 7px ${S.color}00; }
+        }
+        @keyframes lineIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: none; }
+        }
+        select:focus-visible, button:focus-visible { outline: 2px solid ${T.blue}; outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) {
+          * { animation: none !important; transition: none !important; }
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: ${T.line}; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+      `}</style>
+
+      {/* ── Header / status board ─────────────────────────────────────── */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:16, flexWrap:'wrap', marginBottom:20 }}>
         <div>
-          <h1 style={{ margin:0, fontSize:18, fontWeight:600, color:'#1a1a1a' }}>Infra health command centre</h1>
-          <p style={{ margin:'2px 0 0', fontSize:12, color:'#888' }}>
-            {lastUpdated ? `Updated ${lastUpdated.toTimeString().slice(0,8)}` : 'Connecting...'}
+          <div style={{ fontFamily:T.mono, fontSize:11, letterSpacing:'0.22em', color:T.muted, textTransform:'uppercase', marginBottom:4 }}>
+            Infra Healer · Autonomous remediation
+          </div>
+          <h1 style={{ margin:0, fontFamily:T.display, fontSize:22, fontWeight:600, letterSpacing:'-0.01em' }}>
+            Infra health command centre
+          </h1>
+          <p style={{ margin:'4px 0 0', fontFamily:T.mono, fontSize:11.5, color:T.muted }}>
+            {lastUpdated ? `LAST TELEMETRY ${lastUpdated.toTimeString().slice(0,8)}` : 'CONNECTING…'}
           </p>
         </div>
-        {(() => {
-          const s = {
-            operational: { bg:'#D4EDC1', fg:'#1F4D08', bd:'#639922', glow:'rgba(99,153,34,0.15)',  label:'ALL SYSTEMS OPERATIONAL' },
-            healing:     { bg:'#FAEEDA', fg:'#633806', bd:'#EF9F27', glow:'rgba(239,159,39,0.18)', label:'AI HEALING IN PROGRESS' },
-            degraded:    { bg:'#FBD2D2', fg:'#7A1414', bd:'#E24B4A', glow:'rgba(226,75,74,0.15)',  label:'SERVICE DEGRADED' },
-          }[status]
-          return (
-            <div style={{
-              fontSize:18, fontWeight:700, padding:'12px 28px', borderRadius:12,
-              background:s.bg, color:s.fg, border:`2px solid ${s.bd}`,
-              boxShadow:`0 0 0 4px ${s.glow}`,
-              display:'flex', alignItems:'center', gap:10, letterSpacing:'0.02em'
-            }}>
-              <span style={{ display:'inline-block', width:12, height:12, borderRadius:'50%',
-                background:s.bd, boxShadow:`0 0 8px ${s.bd}` }} />
-              {s.label}
-            </div>
-          )
-        })()}
+
+        {/* Signature: the status board */}
+        <div style={{
+          display:'flex', alignItems:'center', gap:14,
+          padding:'14px 22px', borderRadius:12,
+          background:T.panelSoft, border:`1px solid ${S.color}55`,
+          boxShadow:`inset 0 0 24px ${S.color}0F`,
+        }}>
+          <span style={{
+            width:11, height:11, borderRadius:'50%',
+            background:S.color, animation:'beacon 2s ease-in-out infinite',
+          }} />
+          <span style={{
+            fontFamily:T.mono, fontSize:14, fontWeight:600,
+            letterSpacing:'0.14em', color:S.color,
+          }}>
+            {S.label}
+          </span>
+        </div>
       </div>
 
-      {/* Metric cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:12, marginBottom:16 }}>
-        <MetricCard label="API latency (p99)" value={fmt(metrics.latency,'ms')} trend={trend(history.latency)} healthy={metrics.healthy} good={metrics.latency !== null && metrics.latency < 400} />
+      {/* ── Metric cards ──────────────────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:12, marginBottom:12 }}>
+        <MetricCard label="API latency · p99" value={fmt(metrics.latency,'ms')} trend={trend(history.latency)}   healthy={metrics.healthy} good={metrics.latency   !== null && metrics.latency < 400} />
         <MetricCard label="Error rate"        value={fmt(metrics.errorRate,'%')} trend={trend(history.errorRate)} healthy={metrics.healthy} good={metrics.errorRate !== null && metrics.errorRate < 2} />
-        <MetricCard label="ECS CPU"           value={fmt(metrics.cpu,'%')} trend={trend(history.cpu)} healthy={metrics.healthy} good={metrics.cpu !== null && metrics.cpu < 70} />
-        <MetricCard label="Requests / min"    value={fmt(metrics.rpm)} trend={trend(history.rpm)} healthy={metrics.healthy} good={metrics.rpm !== null && metrics.rpm > 100} />
+        <MetricCard label="ECS CPU"           value={fmt(metrics.cpu,'%')}       trend={trend(history.cpu)}       healthy={metrics.healthy} good={metrics.cpu       !== null && metrics.cpu < 70} />
+        <MetricCard label="Requests / min"    value={fmt(metrics.rpm)}           trend={trend(history.rpm)}       healthy={metrics.healthy} good={metrics.rpm       !== null && metrics.rpm > 100} />
       </div>
 
-      {/* Sparklines */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
-        <SparklineChart title="Error rate last 60s" data={history.errorRate} color={isHealthy ? '#639922' : '#E24B4A'} threshold={2} />
-        <SparklineChart title="API latency p99 last 60s" data={history.latency} color="#185FA5" />
+      {/* ── Sparklines ────────────────────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:12, marginBottom:12 }}>
+        <SparklineChart title="Error rate · last 60s"      data={history.errorRate} color={isHealthy ? T.green : T.red} threshold={2} />
+        <SparklineChart title="API latency p99 · last 60s" data={history.latency}   color={T.blue} />
       </div>
 
-      {/* Service table + heal log */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+      {/* ── Services + heal feed ──────────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(380px,1fr))', gap:12, marginBottom:12 }}>
         <ServiceTable healthy={metrics.healthy} healData={healData} activeBug={healData.activeBug} />
         <HealLog healData={visibleHealData} />
       </div>
 
-      {/* Controls */}
-      <div style={{ background:'#fff', border:'0.5px solid #e0e0e0', borderRadius:10, padding:'14px 16px' }}>
+      {/* ── Fault injection controls ──────────────────────────────────── */}
+      <div style={{ ...panel, padding:'14px 18px' }}>
+        <div style={{ fontFamily:T.mono, fontSize:10.5, letterSpacing:'0.18em', color:T.muted, textTransform:'uppercase', marginBottom:12 }}>
+          Fault injection — demo controls
+        </div>
 
-        {/* Row 1: App bug injection */}
-        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10, flexWrap:'wrap' }}>
-          <span style={{ fontSize:12, color:'#888', minWidth:100 }}>App bug</span>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12.5, color:T.muted, minWidth:92 }}>App bug</span>
           <select value={selectedBug} onChange={e => setSelectedBug(e.target.value)} disabled={!metrics.healthy}
-            style={{ fontSize:13, padding:'6px 10px', borderRadius:6 }}>
+            style={{ fontFamily:T.mono, fontSize:12.5, padding:'7px 10px', borderRadius:8,
+              background:T.panelSoft, color:T.text, border:`1px solid ${T.line}` }}>
             <option value="null_ref">Bug 1 — null reference</option>
             <option value="missing_env">Bug 2 — missing env var</option>
             <option value="divide_by_zero">Bug 3 — divide by zero</option>
           </select>
           <button onClick={injectBug} disabled={injecting || !metrics.healthy}
-            style={{ fontSize:13, padding:'7px 16px', borderRadius:6, cursor:'pointer',
-              background: metrics.healthy ? '#FCEBEB' : '#f0f0f0',
-              color:      metrics.healthy ? '#791F1F' : '#999',
-              border:'0.5px solid #f09595' }}>
-            {injecting ? 'Injecting...' : 'Inject app bug'}
+            style={{ fontFamily:T.mono, fontSize:12.5, fontWeight:600, padding:'8px 18px', borderRadius:8,
+              cursor: metrics.healthy ? 'pointer' : 'not-allowed',
+              background: metrics.healthy ? `${T.red}1A` : T.panelSoft,
+              color:      metrics.healthy ? T.red : T.faint,
+              border:`1px solid ${metrics.healthy ? T.red + '55' : T.line}` }}>
+            {injecting ? 'Injecting…' : 'Inject app bug'}
           </button>
         </div>
 
-        {/* Divider */}
-        <div style={{ borderTop:'0.5px solid #f0f0f0', margin:'4px 0 10px' }} />
+        <div style={{ borderTop:`1px solid ${T.line}`, margin:'2px 0 12px' }} />
 
-        {/* Row 2: Infra bug injection */}
         <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-          <span style={{ fontSize:12, color:'#888', minWidth:100 }}>Infra bug</span>
-          <div style={{ fontSize:13, padding:'6px 12px', borderRadius:6, background:'#f5f5f3', color:'#555', border:'0.5px solid #e0e0e0' }}>
+          <span style={{ fontSize:12.5, color:T.muted, minWidth:92 }}>Infra bug</span>
+          <div style={{ fontFamily:T.mono, fontSize:12.5, padding:'7px 12px', borderRadius:8,
+            background:T.panelSoft, color:T.muted, border:`1px solid ${T.line}` }}>
             ECS scale to zero — all tasks stopped
           </div>
           <button onClick={injectInfraBug} disabled={injecting || !metrics.healthy}
-            style={{ fontSize:13, padding:'7px 16px', borderRadius:6, cursor:'pointer',
-              background: metrics.healthy ? '#FAEEDA' : '#f0f0f0',
-              color:      metrics.healthy ? '#633806' : '#999',
-              border:'0.5px solid #EF9F27' }}>
-            {injecting ? 'Injecting...' : 'Kill infrastructure'}
+            style={{ fontFamily:T.mono, fontSize:12.5, fontWeight:600, padding:'8px 18px', borderRadius:8,
+              cursor: metrics.healthy ? 'pointer' : 'not-allowed',
+              background: metrics.healthy ? `${T.amber}1A` : T.panelSoft,
+              color:      metrics.healthy ? T.amber : T.faint,
+              border:`1px solid ${metrics.healthy ? T.amber + '55' : T.line}` }}>
+            {injecting ? 'Injecting…' : 'Kill infrastructure'}
           </button>
 
-          <span style={{ fontSize:12, color:'#888', marginLeft:'auto' }}>
-            {!metrics.healthy && !healData.healing && !healData.healed && '● Waiting for orchestrator...'}
-            {healData.healing && !healData.healed && '● AI healing in progress...'}
-            {healData.healed && '✓ Last heal successful'}
+          <span style={{ fontFamily:T.mono, fontSize:11.5, color:T.muted, marginLeft:'auto' }}>
+            {!metrics.healthy && !healData.healing && !healData.healed && '● WAITING FOR ORCHESTRATOR…'}
+            {healData.healing && !healData.healed && '● AI HEALING IN PROGRESS…'}
+            {healData.healed && '✓ LAST HEAL SUCCESSFUL'}
           </span>
         </div>
-
       </div>
     </div>
   )
