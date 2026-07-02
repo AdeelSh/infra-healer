@@ -157,6 +157,7 @@ app.post('/inject-infra-bug', async (req, res) => {
     state.healthy = false; state.activeBug = 'ecs_scale_zero'
     state.latency = null; state.rpm = 0; state.errorRate = 0
     console.log('FATAL ECS service scaled to desiredCount=0 — all tasks stopped')
+    await clearHealEvents()
     await writeHealEvent(
       'detected',
       'ECS service scaled to zero — all tasks stopped. Infrastructure misconfiguration detected. Waiting for orchestrator...',
@@ -167,6 +168,7 @@ app.post('/inject-infra-bug', async (req, res) => {
     state.healthy = false; state.activeBug = 'ecs_scale_zero'
     state.latency = null; state.rpm = 0; state.errorRate = 0
     console.log('FATAL ECS service scaled to desiredCount=0 — all tasks stopped (simulated)')
+    await clearHealEvents()
     await writeHealEvent(
       'detected',
       'ECS service scaled to zero (simulated) — infrastructure misconfiguration detected.',
@@ -190,9 +192,19 @@ app.get('/heal-status', async (req, res) => {
       .map(item => unmarshall(item))
       .sort((a, b) => a.timestamp - b.timestamp)
     const last = events[events.length - 1]
-    const healing = !!last && last.status === 'running'
-    const healed  = !!last && last.status === 'success'
+
+    // A heal is only "done" when the FINAL step succeeds — an intermediate
+    // step writing status=success (e.g. diagnosis) must not end the cycle.
+    const TERMINAL_STEPS = ['trigger_deploy', 'complete', 'verified', 'done']
+    const healed = !!last && last.status === 'success' && TERMINAL_STEPS.includes(last.step)
+
     const deploying = !!last && last.step === 'trigger_deploy' && last.status === 'running'
+
+    // Healing = work in flight OR a bug still active with events in the log.
+    // The activeBug fallback keeps this true between orchestrator steps,
+    // so the banner doesn't flicker green mid-cycle.
+    const healing = !healed && !!last && (last.status === 'running' || state.activeBug !== null)
+
     if ((healed || deploying) && !state.healthy) {
       state.healthy = true; state.activeBug = null
       state.cpu = 34; state.latency = 142; state.errorRate = 0.3; state.rpm = 847

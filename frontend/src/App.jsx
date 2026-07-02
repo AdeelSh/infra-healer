@@ -87,7 +87,10 @@ export default function App() {
     return d > 0 ? 'up' : d < 0 ? 'down' : 'flat'
   }
   const fmt = (v, s = '') => v === null ? '-' : `${v}${s}`
-  const isHealthy = metrics.healthy && !healData.activeBug
+  const status = healData.healing ? 'healing'
+    : (!metrics.healthy || healData.activeBug || (healData.events?.length && !healData.healed)) ? 'degraded'
+    : 'operational'
+  const isHealthy = status === 'operational'
 
   return (
     <div style={{ minHeight:'100vh', background:'#f5f5f3', fontFamily:'system-ui,sans-serif', padding:24, boxSizing:'border-box' }}>
@@ -100,24 +103,25 @@ export default function App() {
             {lastUpdated ? `Updated ${lastUpdated.toTimeString().slice(0,8)}` : 'Connecting...'}
           </p>
         </div>
-        <div style={{
-          fontSize:18, fontWeight:700, padding:'12px 28px', borderRadius:12,
-          background: isHealthy ? '#D4EDC1' : '#FBD2D2',
-          color:      isHealthy ? '#1F4D08' : '#7A1414',
-          border: `2px solid ${isHealthy ? '#639922' : '#E24B4A'}`,
-          boxShadow: isHealthy
-            ? '0 0 0 4px rgba(99,153,34,0.15)'
-            : '0 0 0 4px rgba(226,75,74,0.15)',
-          display:'flex', alignItems:'center', gap:10,
-          letterSpacing:'0.02em'
-        }}>
-          <span style={{
-            display:'inline-block', width:12, height:12, borderRadius:'50%',
-            background: isHealthy ? '#639922' : '#E24B4A',
-            boxShadow: `0 0 8px ${isHealthy ? '#639922' : '#E24B4A'}`
-          }} />
-          {isHealthy ? 'ALL SYSTEMS OPERATIONAL' : 'SERVICE DEGRADED'}
-        </div>
+        {(() => {
+          const s = {
+            operational: { bg:'#D4EDC1', fg:'#1F4D08', bd:'#639922', glow:'rgba(99,153,34,0.15)',  label:'ALL SYSTEMS OPERATIONAL' },
+            healing:     { bg:'#FAEEDA', fg:'#633806', bd:'#EF9F27', glow:'rgba(239,159,39,0.18)', label:'AI HEALING IN PROGRESS' },
+            degraded:    { bg:'#FBD2D2', fg:'#7A1414', bd:'#E24B4A', glow:'rgba(226,75,74,0.15)',  label:'SERVICE DEGRADED' },
+          }[status]
+          return (
+            <div style={{
+              fontSize:18, fontWeight:700, padding:'12px 28px', borderRadius:12,
+              background:s.bg, color:s.fg, border:`2px solid ${s.bd}`,
+              boxShadow:`0 0 0 4px ${s.glow}`,
+              display:'flex', alignItems:'center', gap:10, letterSpacing:'0.02em'
+            }}>
+              <span style={{ display:'inline-block', width:12, height:12, borderRadius:'50%',
+                background:s.bd, boxShadow:`0 0 8px ${s.bd}` }} />
+              {s.label}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Metric cards */}
